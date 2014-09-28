@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Chat</title>
+	<!-- Algo de estilo, hagalo en un archivo aparte porfavor -->
+	<style>
+		#chat{
+			height: 500px;
+		}
+		#contentWrap{
+			display: none;
+		}
+		#chatWrap{
+			float: left;
+			border: 1px #000 solid;
+		}
+	</style>
+</head>
+<body>
+	<!-- La gracia es pedir un nombre de usuario antes de poder chatear -->
+	<div id="nickWrap">
+		<p>Ingrese su nombre de usuario:</p>
+		<!-- Y si el nick ya esta siendo usado -->
+		<p id="nickError"></p>
+		<!-- Recibimos el nick -->
+		<form id="setNick">
+			<input size="35" id="nickname"></input>
+			<input type="submit"></input>
+		</form>
+	</div>
+	<!-- End -->
+	
+	<!-- Contenido -->
+	<div id="contentWrap">
+		<!-- Apartado para el chat -->
+		<div id="chatWrap">
+			<!-- en este div iran los mensajes del chat -->
+			<div id="chat"></div>
+
+			<!-- Formulario para el envio de mensajes -->
+			<form id="send-message">
+				<input size="35" id="message"></input>
+				<input type="submit"></input>
+			</form>
+		</div>
+		<!-- Apartado para los usuarios -->
+		<div id="users"></div>
+	</div>
+	<!-- END -->
+
+	<!-- Usaremos JQuery -->
+	<script src="http://code.jquery.com/jquery-latest.min.js"></script>
+	<!-- Se debe llamar al modulo de socket.io -->
+	<script src="/socket.io/socket.io.js"></script>
+
+	<!-- Aca empieza la magia -->
+	<script>
+		/*
+		Esta funcion se ejecutara cuando toda la pagina termine de cargar, es automatico
+		*/
+		$(function(){
+			//variable para conectarse al socket
+			var socket = io.connect();
+			//form para enviar el nick
+			var $nickForm = $('#setNick');
+			//por si hay nick repetido
+			var $nickError = $('#nickError');
+			//el nick en si
+			var $nickBox = $('#nickname');
+			//usuarios
+			var $users = $('#users');
+			//form para enviar el mensaje 
+			var $messageForm = $('#send-message');
+			//este es el input, el mensaje en si
+			var $messageBox = $('#message');
+			//chat, es la variable donde se irá mostrando el chat
+			var $chat = $('#chat');
+
+			//cada vez que se haga un submit de un nick, lo enviaremos al servidor
+			$nickForm.submit(function(e){
+				//Para evitar que se hagan refresh de la página, así solo enviamos el mensaje
+				e.preventDefault();
+				/*
+					hacemos un emit bajo el alias new user, aca hacemos algo distinto
+					si el nick es valido, escondemos la parte de ingreso de nick y 
+					mostramos la ventana del chat
+					OJO! Es la misma vista!
+				*/
+				socket.emit('new user', $nickBox.val(), function(data){
+					//Si se retorna true (este es el valor de callback desde el servidor) ingresamos al chat
+					if(data){
+						$('#nickWrap').hide();
+						$('#contentWrap').show();
+					}
+					//Si no, mostramos mensaje de error al usuario
+					else{
+						$nickError.html('Nombre de usuario ya existe, intenta con otro.');
+					}
+				});
+				//Vaciamos el contenido de nickbox
+				$nickBox.val('');
+			});
+
+			/*
+				Aca es donde mostramos los usuarios conectados
+				simplemente iteramos por el arreglo de usuarios
+			*/
+			socket.on('usernames', function(data){
+				var html = '';
+				for(i=0; i<data.length; i++){
+					html += data[i]+'<br/>'
+				}
+				$users.html(html);
+
+			});
+
+			// cada vez que se haga un submit de un mensaje, lo enviaremos al servidor
+			$messageForm.submit(function(e){
+				//Para evitar que se hagan refresh de la página, así solo enviamos el mensaje
+				e.preventDefault();
+				/*Hacemos un emit por medio nuestro socket, envia un evento al servidor
+				  en este caso se llama 'send message'
+				  y envia el contenido de messageBox
+				*/
+				socket.emit('send message', $messageBox.val());
+				//limpiamos el contenido
+				$messageBox.val('');
+			});
+
+			/*
+				recibimos el mensaje del servidor, estamos usando el mismo alias 
+				que el nos envio: 'new message'
+			*/
+			socket.on('new message', function(data){
+				/*	hacemos un append para no perder los mensajes anteriores
+					y mostramos el nick y el mensaje
+				*/
+				$chat.append('<b>'+data.nick+':</b>'+data.msg+"<br/>");
+			});
+
+		});
+	</script>
+</body>
+</html>
